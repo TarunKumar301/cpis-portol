@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPIS Ultimate Steno v3.1</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        :root { --primary: #0f172a; --secondary: #2563eb; --success: #059669; --danger: #dc2626; --warning: #f59e0b; }
+        body { font-family: 'Segoe UI', sans-serif; background: #e2e8f0; margin: 0; user-select: none; }
+        .full-screen { position: fixed; inset: 0; display: flex; justify-content: center; align-items: center; z-index: 10000; flex-direction: column; }
+        #login-screen { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; }
+        .logo-box { background: white; padding: 40px; border-radius: 25px; text-align: center; width: 420px; color: #1e293b; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border-top: 8px solid var(--secondary); }
+        .big-logo { font-size: 55px; font-weight: 900; color: var(--secondary); letter-spacing: -2px; margin-bottom: 0; }
+        .logo-subtext { color: #64748b; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; margin-bottom: 30px; }
+        #bulk-screen { background: #1e293b; display: none; color: white; padding: 20px; }
+        #main-app { display: none; max-width: 1250px; margin: 15px auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
+        .timer-box { font-size: 42px; font-weight: 800; color: var(--secondary); background: #f0f7ff; padding: 8px 30px; border-radius: 10px; border: 2px solid #dbeafe; font-family: 'Courier New', monospace; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 15px 0; }
+        label { font-size: 13px; font-weight: 700; color: #475569; margin-bottom: 5px; display: block; }
+        input, select, textarea { width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 15px; box-sizing: border-box; }
+        #typeArea { height: 380px; font-size: 19px; line-height: 2.1; font-family: 'Times New Roman', serif; resize: none; background: #fff; border: 2px solid #cbd5e1; outline: none; }
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        .btn-blue { background: var(--secondary); color: white; }
+        .btn-green { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .f-mistake { color: var(--danger); text-decoration: underline wavy; font-weight: bold; }
+        .h-mistake { color: var(--warning); text-decoration: underline; font-weight: bold; }
+        .blink-red { color: var(--danger) !important; border-color: var(--danger) !important; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+        #previewModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 11000; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 85%; height: 90%; border-radius: 10px; padding: 15px; position: relative; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+<div id="login-screen" class="full-screen">
+    <div class="logo-box">
+        <div class="big-logo">CPIS</div>
+        <div class="logo-subtext">Steno & Typing Academy</div>
+        <input type="password" id="adminKey" placeholder="Enter Access Code" style="text-align:center; margin-bottom:15px;">
+        <button class="btn btn-blue" style="width:100%;" onclick="doLogin()">Teacher Login</button>
+        <p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">System: <span style="color:#059669">Cloud Managed (v3.1)</span></p>
+    </div>
+</div>
+
+<div id="bulk-screen" class="full-screen">
+    <div class="logo-box" style="width: 500px;">
+        <h3>Manage Library</h3>
+        <input type="file" id="bulkInput" multiple accept=".pdf">
+        <div id="uploadStatus" style="margin: 15px 0; font-size: 14px; background: #f1f5f9; padding: 10px;">Waiting for files...</div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-danger" style="flex:1;" onclick="clearLibrary()">Reset Library</button>
+            <button class="btn btn-green" style="flex:2;" onclick="finishUpload()">Open Student Portal</button>
+        </div>
+    </div>
+</div>
+
+<div id="main-app">
+    <div class="header">
+        <h2 style="margin:0; color:#1e293b; font-size: 20px;">CPIS Portal <span id="libCount" style="font-size:12px; font-weight:normal; opacity:0.6;"></span></h2>
+        <div class="timer-box" id="timerDisplay">00:00</div>
+    </div>
+    <div class="controls">
+        <div><label>Matter Type</label><select id="matterType"></select></div>
+        <div><label>Ex. No.</label><div style="display:flex; gap:5px;"><input type="text" id="exeNum" placeholder="No."><button class="btn btn-blue" style="padding:10px;" onclick="loadPdf()">LOAD</button></div></div>
+        <div><label>Target Words</label><select id="matterLength"><option value="400">400 Words</option><option value="800">800 Words</option><option value="full" selected>Full Matter</option></select></div>
+        <div><label>Grade</label><select id="grade"><option value="C">Grade C</option><option value="D" selected>Grade D</option></select></div>
+        <div><label>Time (Min)</label><input type="number" id="timeInput" value="50"></div>
+        <div><label>View PDF</label><button class="btn" style="background:#64748b; color:white; width:100%;" onclick="togglePreview()">VIEW</button></div>
+    </div>
+    <textarea id="typeArea" placeholder="Load matter and start..." disabled onpaste="return false;"></textarea>
+    <div style="text-align:center; margin-top:15px; display:flex; justify-content:center; gap:15px;">
+        <button id="startBtn" class="btn btn-blue" onclick="startTest()">Start Test</button>
+        <button id="evalBtn" class="btn btn-green" onclick="evaluateTest()" style="display:none;">Submit Result</button>
+        <button class="btn" style="background:#94a3b8; color:white;" onclick="location.reload()">Refresh</button>
+    </div>
+    <div id="resultSection"></div>
+</div>
+
+<div id="previewModal"><div class="modal-content"><button onclick="togglePreview()" style="float:right; background:red; color:white; border:none; padding:10px;">CLOSE</button><iframe id="pdfFrame" src="" style="width:100%; height:92%; border:none; margin-top:10px;"></iframe></div></div>
+
+<script>
+    let db, library = {}, masterText = "", timer, timeLeft, totalSec;
+
+    const request = indexedDB.open("CPIS_Final_V31", 1);
+    request.onupgradeneeded = e => { e.target.result.createObjectStore("files", { keyPath: "id" }); };
+    request.onsuccess = e => { db = e.target.result; refreshLibraryStatus(); };
+
+    function doLogin() {
+        const key = document.getElementById('adminKey').value;
+        const now = new Date();
+        const d = String(now.getDate()).padStart(2, '0');
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const isFeatureDeleted = localStorage.getItem('monthEndDeleted') === 'true';
+
+        // 1. Kill Switch
+        if (key === "tarun@2001") {
+            localStorage.setItem('monthEndDeleted', 'true');
+            alert("Month-End password permanent block ho gaya!");
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('bulk-screen').style.display = 'flex';
+            return;
+        }
+
+        const nextDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const isMonthEnd = !isFeatureDeleted && (now.getDate() === nextDay.getDate());
+
+        if (key === "Career2026#" + d + m || key === "Admin@99" || (isMonthEnd && key === "tarun@010701")) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('bulk-screen').style.display = 'flex';
+        } else { alert("Wrong Access Code!"); }
+    }
+
+    async function extractText(file) {
+        const ab = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(ab).promise;
+        let t = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const pg = await pdf.getPage(i);
+            const ct = await pg.getTextContent();
+            t += ct.items.map(s => s.str).join(" ") + " ";
+        }
+        return t.trim().replace(/\s+/g, ' ');
+    }
+
+    async function finishUpload() {
+        const files = document.getElementById('bulkInput').files;
+        if (files.length > 0) {
+            const tx = db.transaction("files", "readwrite");
+            for (let f of files) {
+                const name = f.name.split('.')[0]; 
+                const text = await extractText(f);
+                tx.objectStore("files").put({ id: name, content: f, text: text });
+            }
+        }
+        await refreshLibraryStatus();
+        document.getElementById('bulk-screen').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+    }
+
+    function refreshLibraryStatus() {
+        const tx = db.transaction("files", "readonly");
+        tx.objectStore("files").getAll().onsuccess = e => {
+            const files = e.target.result;
+            const types = new Set();
+            files.forEach(f => {
+                library[f.id] = f;
+                if(f.id.includes('_')) types.add(f.id.split('_')[0]);
+            });
+            const sel = document.getElementById('matterType');
+            sel.innerHTML = Array.from(types).map(t => `<option value="${t}">${t}</option>`).join('') || '<option>Upload Files</option>';
+            document.getElementById('uploadStatus').innerText = `Matters: ${files.length}`;
+            document.getElementById('libCount').innerText = `(${files.length} Files)`;
+        };
+    }
+
+    function clearLibrary() { if(confirm("Clear Library?")) { db.transaction("files", "readwrite").objectStore("files").clear(); location.reload(); } }
+
+    async function loadPdf() {
+        const id = document.getElementById('matterType').value + "_" + document.getElementById('exeNum').value;
+        const data = library[id];
+        if (!data) return alert("File not found!");
+        masterText = data.text;
+        document.getElementById('pdfFrame').src = URL.createObjectURL(data.content);
+        alert("Matter Loaded!");
+    }
+
+    function togglePreview() {
+        const m = document.getElementById('previewModal');
+        m.style.display = m.style.display === 'flex' ? 'none' : 'flex';
+    }
+
+    function startTest() {
+        if (!masterText) return alert("Load matter first!");
+        timeLeft = document.getElementById('timeInput').value * 60;
+        totalSec = timeLeft;
+        document.getElementById('typeArea').disabled = false;
+        document.getElementById('typeArea').focus();
+        document.getElementById('startBtn').style.display = 'none';
+        document.getElementById('evalBtn').style.display = 'inline-block';
+        timer = setInterval(() => {
+            timeLeft--;
+            let m = Math.floor(timeLeft/60), s = timeLeft%60;
+            const disp = document.getElementById('timerDisplay');
+            disp.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            if(timeLeft < 300) disp.classList.add('blink-red');
+            if(timeLeft <= 0) evaluateTest();
+        }, 1000);
+    }
+
+    function evaluateTest() {
+        clearInterval(timer);
+        document.getElementById('typeArea').disabled = true;
+        const typed = document.getElementById('typeArea').value.trim().split(/\s+/).filter(w=>w!=="");
+        let masterWords = masterText.split(/\s+/);
+        const limit = document.getElementById('matterLength').value;
+        if(limit !== "full") masterWords = masterWords.slice(0, parseInt(limit));
+
+        let fM = 0, hM = 0, resHtml = "", mi = 0, ti = 0;
+        while(mi < masterWords.length || ti < typed.length) {
+            let mw = masterWords[mi] || "", tw = typed[ti] || "";
+            if(mw === tw && mw !== "") { resHtml += `<span>${tw}</span> `; mi++; ti++; }
+            else if(mw !== "" && tw !== "" && mw.toLowerCase().replace(/[,;:?!]/g,"") === tw.toLowerCase().replace(/[,;:?!]/g,"")) {
+                if(mw !== tw) { hM++; resHtml += `<span class="h-mistake">${tw}</span> `; }
+                else { resHtml += `<span>${tw}</span> `; }
+                mi++; ti++;
+            }
+            else {
+                if (masterWords[mi + 1] === tw && tw !== "") { fM++; resHtml += `<span class="f-mistake">[SKIP: ${mw}]</span> `; mi++; }
+                else { fM++; resHtml += `<span class="f-mistake">${tw || mw}</span> `; mi++; ti++; }
+            }
+        }
+        const totalErrs = fM + (hM / 2);
+        const perc = ((totalErrs / masterWords.length) * 100).toFixed(2);
+        const wpm = Math.round(typed.length / ((totalSec - timeLeft) / 60) || 0);
+        const status = perc <= (document.getElementById('grade').value === 'C' ? 5 : 7) ? "PASSED" : "FAILED";
+        document.getElementById('resultSection').innerHTML = `<div style="margin-top:20px; border:2px solid #ddd; border-radius:12px; overflow:hidden;">
+            <div style="background:${status==='PASSED'?'#059669':'#dc2626'}; color:white; padding:18px; font-size:22px; font-weight:bold; text-align:center;">${status} (${perc}% Error)</div>
+            <div style="display:flex; justify-content:space-around; padding:18px; background:#f8fafc; border-bottom:1px solid #ddd;">
+                <span><b>WPM:</b> ${wpm}</span><span><b>Full:</b> ${fM}</span><span><b>Half:</b> ${hM}</span><span><b>Total Errors:</b> ${totalErrs}</span>
+            </div>
+            <div style="height:250px; overflow-y:auto; padding:20px; text-align:left; line-height:2.3; font-family:'Times New Roman'; font-size:19px;">${resHtml}</div>
+        </div>`;
+    }
+</script>
+</body>
+</html>
